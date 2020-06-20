@@ -6,7 +6,7 @@
     VPCName:
       Description: The name of the VPC being created.
       Type: String
-      Default: "VPC Public and Private with NAT"
+      Default: "DEMO 2Tier VPC"
 
   Mappings:
     SubnetConfig:
@@ -384,6 +384,20 @@
         PortRange:
           From: "0"
           To: "65535"
+
+    # InboundHTTPPublicNetworkAclEntry2:
+    #   Type: "AWS::EC2::NetworkAclEntry"
+    #   Properties:
+    #     NetworkAclId:
+    #       Ref: "PublicNetworkAcl"
+    #     RuleNumber: "110"
+    #     Protocol: "-1"
+    #     RuleAction: "allow"
+    #     Egress: "false"
+    #     CidrBlock: "0.0.0.0/0"
+    #     PortRange:
+    #       From: "0"
+    #       To: "65535"
 
     OutboundPublicNetworkAclEntry:
       Type: "AWS::EC2::NetworkAclEntry"

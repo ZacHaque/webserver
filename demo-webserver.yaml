@@ -1,10 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Deploys a EC2 instance which can be used for connectivity test. It listen on 80, 443 and 22 and come with netcat, telnet, httpd installed
+Description: Deploy a highly available webserver
 
 Parameters:
-  # VPCID:
-  #   Type: String
-  #   Description: Provide VPC ID where you want to deploy your EC2
   ImageID:
     Type: AWS::EC2::Image::Id
     Description: Provide AMI or Stay with the default
@@ -21,12 +18,6 @@ Parameters:
     Type: String
   ClusterNodeMax:
     Type: String
-  # PrivateSubnets:
-  #   Type: CommaDelimitedList
-  #   Description: Need to provide a comma separated list of subnet ids
-  # PublicSubnets:
-  #   Type: CommaDelimitedList
-  #   Description: Need to provide a comma separated list of subnet ids
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -34,87 +25,34 @@ Metadata:
       - Label:
           default: "Network and EC2 Configuration"
         Parameters:
-          - VPCID
-          # - SubnetID
           - ImageID
+          - ClusterNodeInstanceType
       - Label:
           default: "Tagging Details"
         Parameters:
           - EngineerName
           - EngineerEmail
-    ParameterLabels:
-      VPCID:
-        default: "Provide network info, where should this be deployed to?"
+      - Label:
+          default: "Autoscaling Details"
+        Parameters:
+          - ClusterNodeMin
+          - ClusterNodeMax
 
 Resources:
-  # WebServerEC2:
-  #   Type: AWS::EC2::Instance
-  #   Properties:
-  #     IamInstanceProfile: !Ref WebServerInstanceProfile
-  #     ImageId: !Ref InstanceID
-  #     InstanceType: t2.micro
-  #     Tags:
-  #         - Key: Name
-  #           Value: !Sub ${AWS::StackName}
-  #         - Key: owner
-  #           Value: !Ref EngineerName
-  #         - Key: Availability
-  #           Value: "24x7"
-  #         - Key: OwnerEmail
-  #           Value: !Ref EngineerEmail
-  #         - Key: Service
-  #           Value: WebServer
-  #     BlockDeviceMappings:
-  #       - DeviceName: /dev/xvda
-  #         Ebs:
-  #           DeleteOnTermination: true
-  #           Encrypted: true
-  #     NetworkInterfaces:
-  #       - NetworkInterfaceId: !Ref 'Eth0'
-  #         DeviceIndex: '0'
-  #     UserData:
-  #       Fn::Base64: |
-  #           #!/bin/bash
-  #           yum update -y
-  #           yum install -y mod24_ssl.x86_64
-  #           service httpd start
-  #           chkconfig httpd on
-
   WebServerSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
       VpcId: !ImportValue ap-southeast-2-vpc-VPC
-        #!Ref VPCID
       GroupDescription: "Enable Http and Https access via port 80 and 443"
       SecurityGroupIngress:
       - CidrIp: 0.0.0.0/0
         FromPort: 80
         IpProtocol: tcp
         ToPort: 80
-      # - CidrIp: 0.0.0.0/0
-      #   FromPort: '22'
-      #   IpProtocol: tcp
-      #   ToPort: '22'
       - CidrIp: 0.0.0.0/0
         FromPort: 443
         IpProtocol: tcp
         ToPort: 443
-
-  # Eth0:
-  #   Type: AWS::EC2::NetworkInterface
-  #   Properties:
-  #     Description: eth0
-  #     GroupSet: 
-  #       - !Ref WebServerSG
-  #     SourceDestCheck: true
-  #     SubnetId: !Ref SubnetID 
-  #     Tags:
-  #       - Key: Name
-  #         Value: Interface 0
-  #       - Key: Interface
-  #         Value: eth0
-  #       - Key: owner
-  #         Value: !Ref EngineerName
 
   WebServerPolicy:
     Type: AWS::IAM::Policy
@@ -128,7 +66,8 @@ Resources:
           - Effect: Allow
             Action:
               - "ec2:DescribeInstances"
-            Resource: ["*"]
+            Resource:
+              - '*'
           - Effect: Allow
             Action:
               - "logs:CreateLogGroup"
@@ -157,31 +96,21 @@ Resources:
                 - ec2.amazonaws.com
             Action: 
               - "sts:AssumeRole"
-      # PermissionsBoundary: !Sub arn:aws:iam::${AWS::AccountId}:policy/EngineerBoundaryPolicy
       ManagedPolicyArns:
           - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-      Policies:
-        # - PolicyName: DecryptKms
-        #   PolicyDocument:
-        #     Version: 2012-10-17
-        #     Statement:
-        #       - Effect: Allow
-        #         Action:
-        #           - kms:Decrypt
-        #         Resource: '*'
-        - PolicyName: SSMS3LogPermissions
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:PutObject
-                  - s3:PutObjectAcl
-                  - s3:GetEncryptionConfiguration
-                  - s3:GetObject
-                Resource: '*'
-                # - !Sub 'arn:aws:s3:::ssm-sessions-${AWS::AccountId}-b0.prod.logging.cld/*'
-                # - !Sub 'arn:aws:s3:::ssm-sessions-${AWS::AccountId}-b0.prod.logging.cld'
+      # Policies:
+      #   - PolicyName: SSMS3LogPermissions
+      #     PolicyDocument:
+      #       Version: 2012-10-17
+      #       Statement:
+      #         - Effect: Allow
+      #           Action:
+      #             - s3:PutObject
+      #             - s3:PutObjectAcl
+      #             - s3:GetEncryptionConfiguration
+      #             - s3:GetObject
+      #           Resource: '*'
+
   WebServerInstanceProfile:
     Type: "AWS::IAM::InstanceProfile"
     Properties:
@@ -189,13 +118,9 @@ Resources:
       Roles: 
         - !Ref WebServerRole
 
-#======
   WebServerLoadBalancer:
     Type: AWS::ElasticLoadBalancing::LoadBalancer
     Properties:
-      AppCookieStickinessPolicy:
-        - CookieName: BITBUCKETSESSIONID
-          PolicyName: SessionStickiness
       ConnectionDrainingPolicy:
         Enabled: true
         Timeout: 300
@@ -207,7 +132,6 @@ Resources:
           Protocol: HTTP
           InstancePort: '80'
           InstanceProtocol: HTTP
-          # PolicyNames: [SessionStickiness]
         # - !If
         #   - DoSSL
         #   - LoadBalancerPort: '443'
@@ -229,12 +153,12 @@ Resources:
         Timeout: '10'
         UnhealthyThreshold: '2'
       Scheme: 'internet-facing'
-      SecurityGroups: [!Ref ClassicLoadBalancerSG]
-      # Subnets: !Split [ ",", !Join [ ",", [ !ImportValue PRI1-T1-ID-r0, !ImportValue PRI2-T1-ID-r0, !ImportValue PRI3-T1-ID-r0 ] ] ]
-      # FIXME: Following id only applies to cdtools-dev account, Once new export is available would update the stack
-      Subnets: #!Ref PublicSubnets
-        - !ImportValue ap-southeast-2-vpc-PublicSubnet0
+      SecurityGroups: 
+        - !Ref ClassicLoadBalancerSG
+      Subnets:
         - !ImportValue ap-southeast-2-vpc-PublicSubnet1
+        - !ImportValue ap-southeast-2-vpc-PublicSubnet2
+        - !ImportValue ap-southeast-2-vpc-PublicSubnet3
       # Tags:
       #   - Key: Name
       #     Value: !Sub ["${StackName} LoadBalancer", StackName: !Ref 'AWS::StackName']
@@ -245,10 +169,10 @@ Resources:
     Properties:
       GroupDescription: Security group allowing SSH and HTTP/HTTPS access
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
+        # - IpProtocol: tcp
+        #   FromPort: 22
+        #   ToPort: 22
+        #   CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
@@ -259,21 +183,14 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Join [' ', [!Ref 'AWS::StackName', SG]]
-      # FIXME: Following id only applies to cdtools-dev account, Once new export is available would update the stack
+          Value: !Sub ${AWS::StackName}-SG
       VpcId: !ImportValue ap-southeast-2-vpc-VPC
-      #!Ref VPCID
 
   ClusterNodeGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       DesiredCapacity: !Ref ClusterNodeMin
       LaunchConfigurationName: !Ref ClusterNodeLaunchConfig
-      # LifecycleHookSpecificationList:
-      #   - LifecycleTransition: "autoscaling:EC2_INSTANCE_LAUNCHING"
-      #     LifecycleHookName: !Ref AWS::StackName
-      #     DefaultResult: "CONTINUE"
-      #     HeartbeatTimeout: 60
       # NotificationConfigurations:
       # - TopicARN: !ImportValue CDTOOLS-SNS-TOPIC-r0
       #   NotificationTypes:
@@ -286,15 +203,13 @@ Resources:
         - !Ref WebServerLoadBalancer
       MinSize: !Ref ClusterNodeMin
       MaxSize: !Ref ClusterNodeMax
-      # VPCZoneIdentifier: !Split [ ",", !Join [ ",", [ !ImportValue PRI1-T1-ID-r0, !ImportValue PRI2-T1-ID-r0, !ImportValue PRI3-T1-ID-r0 ] ] ]
-      #FIXME: Need to collect new import variables from inception
-      VPCZoneIdentifier: #!Ref PrivateSubnets
-        - !ImportValue ap-southeast-2-vpc-PrivateSubnet0
+      VPCZoneIdentifier:
         - !ImportValue ap-southeast-2-vpc-PrivateSubnet1
+        - !ImportValue ap-southeast-2-vpc-PrivateSubnet2
+        - !ImportValue ap-southeast-2-vpc-PrivateSubnet3
       HealthCheckType: ELB
-      HealthCheckGracePeriod: 300
+      HealthCheckGracePeriod: 120
       Tags:
-        
         - Key: Name
           PropagateAtLaunch: true
           Value: !Sub ${AWS::StackName}
@@ -314,8 +229,7 @@ Resources:
   ClusterNodeLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
-      AssociatePublicIpAddress: true
-      # KeyName: !If [ KeyProvided, !Ref KeyPairName, !ImportValue ATL-DefaultKey ]
+      AssociatePublicIpAddress: false
       IamInstanceProfile: !Ref WebServerInstanceProfile
       ImageId: !Ref ImageID
       InstanceType: !Ref ClusterNodeInstanceType
@@ -324,11 +238,20 @@ Resources:
       UserData:
         Fn::Base64: |
             #!/bin/bash
-            yum update -y
-            yum install -y mod24_ssl.x86_64
-            service httpd start
-            chkconfig httpd on
+            yum install -y httpd
+            systemctl start httpd
             echo "Hello, World" > /var/www/html/index.html
+            systemctl enable httpd
+            yum update -y
+
+
+
+  # yum update -y
+  # yum install -y mod24_ssl.x86_64
+  # service httpd start
+  # chkconfig httpd on
+  # echo "Hello, World" > /var/www/html/index.html
+
   ClusterNodeScaleUpPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
@@ -336,6 +259,7 @@ Resources:
       AutoScalingGroupName: !Ref ClusterNodeGroup
       Cooldown: '600'
       ScalingAdjustment: 1
+
   ClusterNodeScaleDownPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
@@ -343,6 +267,7 @@ Resources:
       AutoScalingGroupName: !Ref ClusterNodeGroup
       Cooldown: '600'
       ScalingAdjustment: -1
+
   CPUAlarmHigh:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -353,11 +278,14 @@ Resources:
       Period: 60
       EvaluationPeriods: 5
       Threshold: 60
-      AlarmActions: [!Ref ClusterNodeScaleUpPolicy]
+      AlarmActions: 
+        - !Ref ClusterNodeScaleUpPolicy
       Dimensions:
         - Name: AutoScalingGroupName
           Value: !Ref ClusterNodeGroup
       ComparisonOperator: GreaterThanThreshold
+
+      
 Outputs:
   ClusterNodeGroup:
     Description: The name of the auto scaling group of cluster nodes

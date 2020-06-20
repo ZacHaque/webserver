@@ -42,7 +42,7 @@ Resources:
   WebServerSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      VpcId: !ImportValue ap-southeast-2-vpc-VPC
+      VpcId: !ImportValue ap-southeast-2-demo-vpc-VPC
       GroupDescription: "Enable Http and Https access via port 80 and 443"
       SecurityGroupIngress:
       - CidrIp: 0.0.0.0/0
@@ -156,9 +156,9 @@ Resources:
       SecurityGroups: 
         - !Ref ClassicLoadBalancerSG
       Subnets:
-        - !ImportValue ap-southeast-2-vpc-PublicSubnet1
-        - !ImportValue ap-southeast-2-vpc-PublicSubnet2
-        - !ImportValue ap-southeast-2-vpc-PublicSubnet3
+        - !ImportValue ap-southeast-2-demo-vpc-PublicSubnet1
+        - !ImportValue ap-southeast-2-demo-vpc-PublicSubnet2
+        - !ImportValue ap-southeast-2-demo-vpc-PublicSubnet3
       # Tags:
       #   - Key: Name
       #     Value: !Sub ["${StackName} LoadBalancer", StackName: !Ref 'AWS::StackName']
@@ -184,7 +184,7 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${AWS::StackName}-SG
-      VpcId: !ImportValue ap-southeast-2-vpc-VPC
+      VpcId: !ImportValue ap-southeast-2-demo-vpc-VPC
 
   ClusterNodeGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -204,9 +204,9 @@ Resources:
       MinSize: !Ref ClusterNodeMin
       MaxSize: !Ref ClusterNodeMax
       VPCZoneIdentifier:
-        - !ImportValue ap-southeast-2-vpc-PrivateSubnet1
-        - !ImportValue ap-southeast-2-vpc-PrivateSubnet2
-        - !ImportValue ap-southeast-2-vpc-PrivateSubnet3
+        - !ImportValue ap-southeast-2-demo-vpc-PrivateSubnet1
+        - !ImportValue ap-southeast-2-demo-vpc-PrivateSubnet2
+        - !ImportValue ap-southeast-2-demo-vpc-PrivateSubnet3
       HealthCheckType: ELB
       HealthCheckGracePeriod: 120
       Tags:
@@ -243,14 +243,31 @@ Resources:
             echo "Hello, World" > /var/www/html/index.html
             systemctl enable httpd
             yum update -y
+            sudo yum install -y awslogs
+            sed -i 's/us-east-1/ap-southeast-2 /g' /etc/awslogs/awscli.conf
+            cat > /etc/awslogs/awslogs.conf <<- 'EOF'
+            [general]
 
+            [/var/log/httpd/access_log]
+            datetime_format = %b %d %H:%M:%S
+            file = /var/log/httpd/access_log
+            buffer_duration = 5000
+            log_stream_name = {instance_id}
+            initial_position = start_of_file
+            log_group_name = webserver-access_log
 
+            [/var/log/httpd/error_log]
+            datetime_format = %b %d %H:%M:%S
+            file = /var/log/httpd/error_log
+            buffer_duration = 5000
+            log_stream_name = {instance_id}
+            initial_position = start_of_file
+            log_group_name = webserver-error_log
 
-  # yum update -y
-  # yum install -y mod24_ssl.x86_64
-  # service httpd start
-  # chkconfig httpd on
-  # echo "Hello, World" > /var/www/html/index.html
+            EOF
+
+            systemctl start awslogsd
+            systemctl enable awslogsd.service
 
   ClusterNodeScaleUpPolicy:
     Type: AWS::AutoScaling::ScalingPolicy

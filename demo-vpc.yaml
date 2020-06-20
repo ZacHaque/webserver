@@ -12,14 +12,18 @@
     SubnetConfig:
       VPC:
         CIDR: "10.0.0.0/16"
-      Public0:
-        CIDR: "10.0.0.0/24"
       Public1:
         CIDR: "10.0.1.0/24"
-      Private0:
+      Public2:
         CIDR: "10.0.2.0/24"
-      Private1:
+      Public3:
         CIDR: "10.0.3.0/24"
+      Private1:
+        CIDR: "10.0.4.0/24"
+      Private2:
+        CIDR: "10.0.5.0/24"
+      Private3:
+        CIDR: "10.0.6.0/24"
 
     # This mapping accounts for the scenario when certain AZs
     # are not available to use (this differs on a per account
@@ -29,41 +33,41 @@
     # different AZ to be chosen.
     AZRegions:
       ap-northeast-1:
-        AZs: ["a", "b"]
+        AZs: ["a", "b", "c"]
       ap-northeast-2:
-        AZs: ["a", "b"]
+        AZs: ["a", "b", "c"]
       ap-south-1:
-        AZs: ["a", "b"]
+        AZs: ["a", "b", "c"]
       ap-southeast-1:
-        AZs: ["a", "b"]
+        AZs: ["a", "b", "c"]
       ap-southeast-2:
-        AZs: ["a", "b"]
+        AZs: ["a", "b", "c"]
       ca-central-1:
-        AZs: ["a", "b"]
+        AZs: ["a", "b", "c"]
       eu-central-1:
-        AZs: ["a", "b"]
+        AZs: ["a", "b", "c"]
       eu-west-1:
-        AZs: ["a", "b"]
+        AZs: ["a", "b", "c"]
       eu-west-2:
-        AZs: ["a", "b"]
+        AZs: ["a", "b", "c"]
       sa-east-1:
-        AZs: ["a", "b"]
+        AZs: ["a", "b", "c"]
       us-east-1:
-        AZs: ["a", "b"]
+        AZs: ["a", "b", "c"]
       us-east-2:
-        AZs: ["a", "b"]
+        AZs: ["a", "b", "c"]
       us-west-1:
-        AZs: ["a", "b"]
+        AZs: ["a", "b", "c"]
       us-west-2:
-        AZs: ["a", "b"]
+        AZs: ["a", "b", "c"]
 
   Resources:
 
     VPC:
       Type: "AWS::EC2::VPC"
       Properties:
-        EnableDnsSupport: "true"
-        EnableDnsHostnames: "true"
+        EnableDnsSupport: true
+        EnableDnsHostnames: true
         CidrBlock:
           Fn::FindInMap:
             - "SubnetConfig"
@@ -81,7 +85,7 @@
             Key: "Name"
             Value: !Ref 'VPCName'
 
-    PublicSubnet0:
+    PublicSubnet1:
       Type: "AWS::EC2::Subnet"
       Properties:
         VpcId:
@@ -93,9 +97,9 @@
         CidrBlock:
           Fn::FindInMap:
             - "SubnetConfig"
-            - "Public0"
+            - "Public1"
             - "CIDR"
-        MapPublicIpOnLaunch: "true"
+        MapPublicIpOnLaunch: true
         Tags:
           -
             Key: "Application"
@@ -112,7 +116,7 @@
                 - '-public-'
                 - !Select [ 0, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
 
-    PublicSubnet1:
+    PublicSubnet2:
       Type: "AWS::EC2::Subnet"
       Properties:
         VpcId:
@@ -124,9 +128,9 @@
         CidrBlock:
           Fn::FindInMap:
             - "SubnetConfig"
-            - "Public1"
+            - "Public2"
             - "CIDR"
-        MapPublicIpOnLaunch: "true"
+        MapPublicIpOnLaunch: true
         Tags:
           -
             Key: "Application"
@@ -143,7 +147,7 @@
                 - '-public-'
                 - !Select [ 1, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
 
-    PrivateSubnet0:
+    PublicSubnet3:
       Type: "AWS::EC2::Subnet"
       Properties:
         VpcId:
@@ -151,12 +155,13 @@
         AvailabilityZone:
           Fn::Sub:
             - "${AWS::Region}${AZ}"
-            - AZ: !Select [ 0, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+            - AZ: !Select [ 2, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
         CidrBlock:
           Fn::FindInMap:
             - "SubnetConfig"
-            - "Private0"
+            - "Public3"
             - "CIDR"
+        MapPublicIpOnLaunch: true
         Tags:
           -
             Key: "Application"
@@ -164,14 +169,14 @@
               Ref: "AWS::StackName"
           -
             Key: "Network"
-            Value: "Private"
+            Value: "Public"
           -
             Key: "Name"
             Value: !Join
               - ''
               - - !Ref "VPCName"
-                - '-private-'
-                - !Select [ 0, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+                - '-public-'
+                - !Select [ 2, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
 
     PrivateSubnet1:
       Type: "AWS::EC2::Subnet"
@@ -181,7 +186,7 @@
         AvailabilityZone:
           Fn::Sub:
             - "${AWS::Region}${AZ}"
-            - AZ: !Select [ 1, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+            - AZ: !Select [ 0, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
         CidrBlock:
           Fn::FindInMap:
             - "SubnetConfig"
@@ -201,7 +206,68 @@
               - ''
               - - !Ref "VPCName"
                 - '-private-'
+                - !Select [ 0, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+
+    PrivateSubnet2:
+      Type: "AWS::EC2::Subnet"
+      Properties:
+        VpcId:
+          Ref: "VPC"
+        AvailabilityZone:
+          Fn::Sub:
+            - "${AWS::Region}${AZ}"
+            - AZ: !Select [ 1, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+        CidrBlock:
+          Fn::FindInMap:
+            - "SubnetConfig"
+            - "Private2"
+            - "CIDR"
+        Tags:
+          -
+            Key: "Application"
+            Value:
+              Ref: "AWS::StackName"
+          -
+            Key: "Network"
+            Value: "Private"
+          -
+            Key: "Name"
+            Value: !Join
+              - ''
+              - - !Ref "VPCName"
+                - '-private-'
                 - !Select [ 1, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+  
+    PrivateSubnet3:
+      Type: "AWS::EC2::Subnet"
+      Properties:
+        VpcId:
+          Ref: "VPC"
+        AvailabilityZone:
+          Fn::Sub:
+            - "${AWS::Region}${AZ}"
+            - AZ: !Select [ 2, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+        CidrBlock:
+          Fn::FindInMap:
+            - "SubnetConfig"
+            - "Private3"
+            - "CIDR"
+        Tags:
+          -
+            Key: "Application"
+            Value:
+              Ref: "AWS::StackName"
+          -
+            Key: "Network"
+            Value: "Private"
+          -
+            Key: "Name"
+            Value: !Join
+              - ''
+              - - !Ref "VPCName"
+                - '-private-'
+                - !Select [ 2, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+
 
     InternetGateway:
       Type: "AWS::EC2::InternetGateway"
@@ -261,19 +327,27 @@
         GatewayId:
           Ref: "InternetGateway"
 
-    PublicSubnetRouteTableAssociation0:
-      Type: "AWS::EC2::SubnetRouteTableAssociation"
-      Properties:
-        SubnetId:
-          Ref: "PublicSubnet0"
-        RouteTableId:
-          Ref: "PublicRouteTable"
-
     PublicSubnetRouteTableAssociation1:
       Type: "AWS::EC2::SubnetRouteTableAssociation"
       Properties:
         SubnetId:
           Ref: "PublicSubnet1"
+        RouteTableId:
+          Ref: "PublicRouteTable"
+
+    PublicSubnetRouteTableAssociation2:
+      Type: "AWS::EC2::SubnetRouteTableAssociation"
+      Properties:
+        SubnetId:
+          Ref: "PublicSubnet2"
+        RouteTableId:
+          Ref: "PublicRouteTable"
+
+    PublicSubnetRouteTableAssociation3:
+      Type: "AWS::EC2::SubnetRouteTableAssociation"
+      Properties:
+        SubnetId:
+          Ref: "PublicSubnet3"
         RouteTableId:
           Ref: "PublicRouteTable"
 
@@ -296,8 +370,6 @@
               - ''
               - - !Ref "VPCName"
                 - '-public-nacl'
-
-
 
     InboundHTTPPublicNetworkAclEntry:
       Type: "AWS::EC2::NetworkAclEntry"
@@ -327,14 +399,6 @@
           From: "0"
           To: "65535"
 
-    PublicSubnetNetworkAclAssociation0:
-      Type: "AWS::EC2::SubnetNetworkAclAssociation"
-      Properties:
-        SubnetId:
-          Ref: "PublicSubnet0"
-        NetworkAclId:
-          Ref: "PublicNetworkAcl"
-
     PublicSubnetNetworkAclAssociation1:
       Type: "AWS::EC2::SubnetNetworkAclAssociation"
       Properties:
@@ -343,25 +407,36 @@
         NetworkAclId:
           Ref: "PublicNetworkAcl"
 
-    ElasticIP0:
-      Type: "AWS::EC2::EIP"
+    PublicSubnetNetworkAclAssociation2:
+      Type: "AWS::EC2::SubnetNetworkAclAssociation"
       Properties:
-        Domain: "vpc"
+        SubnetId:
+          Ref: "PublicSubnet2"
+        NetworkAclId:
+          Ref: "PublicNetworkAcl"
+
+    PublicSubnetNetworkAclAssociation3:
+      Type: "AWS::EC2::SubnetNetworkAclAssociation"
+      Properties:
+        SubnetId:
+          Ref: "PublicSubnet3"
+        NetworkAclId:
+          Ref: "PublicNetworkAcl"
 
     ElasticIP1:
       Type: "AWS::EC2::EIP"
       Properties:
         Domain: "vpc"
 
-    NATGateway0:
-      Type: "AWS::EC2::NatGateway"
+    ElasticIP2:
+      Type: "AWS::EC2::EIP"
       Properties:
-        AllocationId:
-          Fn::GetAtt:
-            - "ElasticIP0"
-            - "AllocationId"
-        SubnetId:
-          Ref: "PublicSubnet0"
+        Domain: "vpc"
+
+    ElasticIP3:
+      Type: "AWS::EC2::EIP"
+      Properties:
+        Domain: "vpc"
 
     NATGateway1:
       Type: "AWS::EC2::NatGateway"
@@ -373,18 +448,25 @@
         SubnetId:
           Ref: "PublicSubnet1"
 
-    PrivateRouteTable0:
-      Type: "AWS::EC2::RouteTable"
+    NATGateway2:
+      Type: "AWS::EC2::NatGateway"
       Properties:
-        VpcId:
-          Ref: "VPC"
-        Tags:
-          -
-            Key: "Name"
-            Value: !Join
-              - ''
-              - - !Ref "VPCName"
-                - '-private-route-table-0'
+        AllocationId:
+          Fn::GetAtt:
+            - "ElasticIP2"
+            - "AllocationId"
+        SubnetId:
+          Ref: "PublicSubnet2"
+
+    NATGateway3:
+      Type: "AWS::EC2::NatGateway"
+      Properties:
+        AllocationId:
+          Fn::GetAtt:
+            - "ElasticIP3"
+            - "AllocationId"
+        SubnetId:
+          Ref: "PublicSubnet3"
 
     PrivateRouteTable1:
       Type: "AWS::EC2::RouteTable"
@@ -399,14 +481,31 @@
               - - !Ref "VPCName"
                 - '-private-route-table-1'
 
-    PrivateRouteToInternet0:
-      Type: "AWS::EC2::Route"
+    PrivateRouteTable2:
+      Type: "AWS::EC2::RouteTable"
       Properties:
-        RouteTableId:
-          Ref: "PrivateRouteTable0"
-        DestinationCidrBlock: "0.0.0.0/0"
-        NatGatewayId:
-          Ref: "NATGateway0"
+        VpcId:
+          Ref: "VPC"
+        Tags:
+          -
+            Key: "Name"
+            Value: !Join
+              - ''
+              - - !Ref "VPCName"
+                - '-private-route-table-2'
+
+    PrivateRouteTable3:
+      Type: "AWS::EC2::RouteTable"
+      Properties:
+        VpcId:
+          Ref: "VPC"
+        Tags:
+          -
+            Key: "Name"
+            Value: !Join
+              - ''
+              - - !Ref "VPCName"
+                - '-private-route-table-3'
 
     PrivateRouteToInternet1:
       Type: "AWS::EC2::Route"
@@ -417,13 +516,23 @@
         NatGatewayId:
           Ref: "NATGateway1"
 
-    PrivateSubnetRouteTableAssociation0:
-      Type: "AWS::EC2::SubnetRouteTableAssociation"
+    PrivateRouteToInternet2:
+      Type: "AWS::EC2::Route"
       Properties:
-        SubnetId:
-          Ref: "PrivateSubnet0"
         RouteTableId:
-          Ref: "PrivateRouteTable0"
+          Ref: "PrivateRouteTable2"
+        DestinationCidrBlock: "0.0.0.0/0"
+        NatGatewayId:
+          Ref: "NATGateway2"
+
+    PrivateRouteToInternet3:
+      Type: "AWS::EC2::Route"
+      Properties:
+        RouteTableId:
+          Ref: "PrivateRouteTable3"
+        DestinationCidrBlock: "0.0.0.0/0"
+        NatGatewayId:
+          Ref: "NATGateway3"
 
     PrivateSubnetRouteTableAssociation1:
       Type: "AWS::EC2::SubnetRouteTableAssociation"
@@ -432,6 +541,22 @@
           Ref: "PrivateSubnet1"
         RouteTableId:
           Ref: "PrivateRouteTable1"
+
+    PrivateSubnetRouteTableAssociation2:
+      Type: "AWS::EC2::SubnetRouteTableAssociation"
+      Properties:
+        SubnetId:
+          Ref: "PrivateSubnet2"
+        RouteTableId:
+          Ref: "PrivateRouteTable2"
+
+    PrivateSubnetRouteTableAssociation3:
+      Type: "AWS::EC2::SubnetRouteTableAssociation"
+      Properties:
+        SubnetId:
+          Ref: "PrivateSubnet3"
+        RouteTableId:
+          Ref: "PrivateRouteTable3"
 
   Outputs:
 
@@ -442,13 +567,6 @@
       Export:
         Name: !Sub "${AWS::Region}-${AWS::StackName}-VPC"
 
-    PublicSubnet0:
-      Description: "SubnetId of public subnet 0"
-      Value:
-        Ref: "PublicSubnet0"
-      Export:
-        Name: !Sub "${AWS::Region}-${AWS::StackName}-PublicSubnet0"
-
     PublicSubnet1:
       Description: "SubnetId of public subnet 1"
       Value:
@@ -456,12 +574,19 @@
       Export:
         Name: !Sub "${AWS::Region}-${AWS::StackName}-PublicSubnet1"
 
-    PrivateSubnet0:
-      Description: "SubnetId of private subnet 0"
+    PublicSubnet2:
+      Description: "SubnetId of public subnet 2"
       Value:
-        Ref: "PrivateSubnet0"
+        Ref: "PublicSubnet2"
       Export:
-        Name: !Sub "${AWS::Region}-${AWS::StackName}-PrivateSubnet0"
+        Name: !Sub "${AWS::Region}-${AWS::StackName}-PublicSubnet2"
+
+    PublicSubnet3:
+      Description: "SubnetId of public subnet 3"
+      Value:
+        Ref: "PublicSubnet3"
+      Export:
+        Name: !Sub "${AWS::Region}-${AWS::StackName}-PublicSubnet3"
 
     PrivateSubnet1:
       Description: "SubnetId of private subnet 1"
@@ -469,6 +594,20 @@
         Ref: "PrivateSubnet1"
       Export:
         Name: !Sub "${AWS::Region}-${AWS::StackName}-PrivateSubnet1"
+
+    PrivateSubnet2:
+      Description: "SubnetId of private subnet 2"
+      Value:
+        Ref: "PrivateSubnet2"
+      Export:
+        Name: !Sub "${AWS::Region}-${AWS::StackName}-PrivateSubnet2"
+
+    PrivateSubnet3:
+      Description: "SubnetId of private subnet 3"
+      Value:
+        Ref: "PrivateSubnet3"
+      Export:
+        Name: !Sub "${AWS::Region}-${AWS::StackName}-PrivateSubnet3"
 
     DefaultSecurityGroup:
       Description: "DefaultSecurityGroup Id"

@@ -1,0 +1,26 @@
+[
+  {
+    "ParameterKey": "ClusterNodeMin",
+    "ParameterValue": "1"
+  },
+  {
+    "ParameterKey": "ClusterNodeMax",
+    "ParameterValue": "3"
+  },
+  {
+    "ParameterKey": "ClusterNodeInstanceType",
+    "ParameterValue": "t2.micro"
+  },
+  {
+    "ParameterKey": "ImageID",
+    "ParameterValue": "ami-03686c686b463366b"
+  },
+  {
+    "ParameterKey": "EngineerName",
+    "ParameterValue": "Zac"
+  },
+  {
+    "ParameterKey": "EngineerEmail",
+    "ParameterValue": "me@mycompany.com"
+  }
+]

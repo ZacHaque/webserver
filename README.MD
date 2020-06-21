@@ -49,7 +49,7 @@ Part-2:
 **Assumtions:**
 - AWS CLI is inastalled and AWS credential have sufficiant permission to deploy above resources.
 - SSM logging to s3 is not enforced on the AWS accounts. if yes, S3 access policy to be attched to instance profile.
-- The AWS account is not controlled by SCP to retrict the use of above resources
+- The AWS account is not controlled by SCP to restrict the use of above resources
 
 **Conclution:**
 - Further upliftment like serving on HTTPS can be implemented either from the Load Balancer or from the instance itself.

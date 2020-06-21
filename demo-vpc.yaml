@@ -6,7 +6,7 @@
     VPCName:
       Description: The name of the VPC being created.
       Type: String
-      Default: "VPC Public and Private with NAT"
+      Default: "DEMO 2Tier VPC"
 
   Mappings:
     SubnetConfig:

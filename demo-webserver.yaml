@@ -1,0 +1,268 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Deploy a highly available webserver
+
+Parameters:
+  ImageID:
+    Type: AWS::EC2::Image::Id
+    Description: Provide AMI or Stay with the default
+  EngineerName:
+    Type: String
+    Description: Please provide your Name so resources are tagged properly
+  EngineerEmail:
+    Type: String
+    Description: Please provide your Email so resources are tagged properly
+  ClusterNodeInstanceType:
+    Type: String
+    Description: Please provide what type of instance to use
+  ClusterNodeMin:
+    Type: String
+  ClusterNodeMax:
+    Type: String
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Network and EC2 Configuration"
+        Parameters:
+          - ImageID
+          - ClusterNodeInstanceType
+      - Label:
+          default: "Tagging Details"
+        Parameters:
+          - EngineerName
+          - EngineerEmail
+      - Label:
+          default: "Autoscaling Details"
+        Parameters:
+          - ClusterNodeMin
+          - ClusterNodeMax
+
+Resources:
+  WebServerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !ImportValue ap-southeast-2-demo-vpc-VPC
+      GroupDescription: "Enable Http and Https access via port 80 and 443"
+      SecurityGroupIngress:
+      - CidrIp: 0.0.0.0/0
+        FromPort: 80
+        IpProtocol: tcp
+        ToPort: 80
+      - CidrIp: 0.0.0.0/0
+        FromPort: 443
+        IpProtocol: tcp
+        ToPort: 443
+
+  WebServerPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: WebServerPolicy
+      Roles:
+        - !Ref WebServerRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - "ec2:DescribeInstances"
+            Resource:
+              - '*'
+          - Effect: Allow
+            Action:
+              - "logs:CreateLogGroup"
+              - "logs:CreateLogStream"
+              - "logs:PutLogEvents"
+              - "logs:DescribeLogStreams"
+            Resource:
+              - "arn:aws:logs:*:*:*"
+
+  WebServerRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Tags:
+          - Key: Name
+            Value: WebServerEC2
+          - Key: Owner
+            Value: !Ref EngineerName
+          - Key: OwnerEmail
+            Value: !Ref EngineerEmail
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - ec2.amazonaws.com
+            Action: 
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  WebServerInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: /
+      Roles: 
+        - !Ref WebServerRole
+
+  WebServerLoadBalancer:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      ConnectionDrainingPolicy:
+        Enabled: true
+        Timeout: 300
+      ConnectionSettings:
+        IdleTimeout: 3600
+      CrossZone: true
+      Listeners:
+        - LoadBalancerPort: '80'
+          Protocol: HTTP
+          InstancePort: '80'
+          InstanceProtocol: HTTP
+      HealthCheck:
+        HealthyThreshold: '2'
+        Interval: '15'
+        Target: TCP:80
+        Timeout: '10'
+        UnhealthyThreshold: '2'
+      Scheme: 'internet-facing'
+      SecurityGroups: 
+        - !Ref ClassicLoadBalancerSG
+      Subnets:
+        - !ImportValue ap-southeast-2-demo-vpc-PublicSubnet1
+        - !ImportValue ap-southeast-2-demo-vpc-PublicSubnet2
+        - !ImportValue ap-southeast-2-demo-vpc-PublicSubnet3
+
+  ClassicLoadBalancerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group allowing SSH and HTTP/HTTPS access
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-SG
+      VpcId: !ImportValue ap-southeast-2-demo-vpc-VPC
+
+  ClusterNodeGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      DesiredCapacity: !Ref ClusterNodeMin
+      LaunchConfigurationName: !Ref ClusterNodeLaunchConfig
+      LoadBalancerNames: 
+        - !Ref WebServerLoadBalancer
+      MinSize: !Ref ClusterNodeMin
+      MaxSize: !Ref ClusterNodeMax
+      VPCZoneIdentifier:
+        - !ImportValue ap-southeast-2-demo-vpc-PrivateSubnet1
+        - !ImportValue ap-southeast-2-demo-vpc-PrivateSubnet2
+        - !ImportValue ap-southeast-2-demo-vpc-PrivateSubnet3
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 120
+      Tags:
+        - Key: Name
+          PropagateAtLaunch: true
+          Value: !Sub ${AWS::StackName}
+        - Key: Owner
+          PropagateAtLaunch: true
+          Value: !Ref EngineerName
+        - Key: Availability
+          PropagateAtLaunch: true
+          Value: "24x7"
+        - Key: OwnerEmail
+          PropagateAtLaunch: true
+          Value: !Ref EngineerEmail
+        - Key: Service
+          PropagateAtLaunch: true
+          Value: WebServer
+
+  ClusterNodeLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      AssociatePublicIpAddress: false
+      IamInstanceProfile: !Ref WebServerInstanceProfile
+      ImageId: !Ref ImageID
+      InstanceType: !Ref ClusterNodeInstanceType
+      SecurityGroups: 
+        - !Ref WebServerSG
+      UserData:
+        Fn::Base64: |
+            #!/bin/bash
+            yum install -y httpd
+            systemctl start httpd
+            echo "Hello, World" > /var/www/html/index.html
+            systemctl enable httpd
+            yum update -y
+            sudo yum install -y awslogs
+            sed -i 's/us-east-1/ap-southeast-2 /g' /etc/awslogs/awscli.conf
+            cat > /etc/awslogs/awslogs.conf <<- 'EOF'
+            [general]
+
+            [/var/log/httpd/access_log]
+            datetime_format = %b %d %H:%M:%S
+            file = /var/log/httpd/access_log
+            buffer_duration = 5000
+            log_stream_name = {instance_id}
+            initial_position = start_of_file
+            log_group_name = webserver-access_log
+
+            [/var/log/httpd/error_log]
+            datetime_format = %b %d %H:%M:%S
+            file = /var/log/httpd/error_log
+            buffer_duration = 5000
+            log_stream_name = {instance_id}
+            initial_position = start_of_file
+            log_group_name = webserver-error_log
+
+            EOF
+
+            systemctl start awslogsd
+            systemctl enable awslogsd.service
+
+  ClusterNodeScaleUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref ClusterNodeGroup
+      Cooldown: '600'
+      ScalingAdjustment: 1
+
+  ClusterNodeScaleDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref ClusterNodeGroup
+      Cooldown: '600'
+      ScalingAdjustment: -1
+
+  CPUAlarmHigh:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale up if CPU > 60% for 5 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 60
+      AlarmActions: 
+        - !Ref ClusterNodeScaleUpPolicy
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref ClusterNodeGroup
+      ComparisonOperator: GreaterThanThreshold
+      
+Outputs:
+  ServiceURL:
+    Description: The URL of the Bitbucket Data Center instance
+    Value: !Sub "http://${WebServerLoadBalancer.DNSName}"
+
+ 

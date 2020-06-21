@@ -1,7 +1,7 @@
 [
   {
     "ParameterKey": "ClusterNodeMin",
-    "ParameterValue": "1"
+    "ParameterValue": "2"
   },
   {
     "ParameterKey": "ClusterNodeMax",
@@ -13,14 +13,14 @@
   },
   {
     "ParameterKey": "ImageID",
-    "ParameterValue": "ami-03686c686b463366b"
+    "ParameterValue": "ami-088ff0e3bde7b3fdf"
   },
   {
     "ParameterKey": "EngineerName",
-    "ParameterValue": "Zac"
+    "ParameterValue": "YourName"
   },
   {
     "ParameterKey": "EngineerEmail",
-    "ParameterValue": "me@mycompany.com"
+    "ParameterValue": "You@yourcompany.com.au"
   }
 ]

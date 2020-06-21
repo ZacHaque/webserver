@@ -39,7 +39,7 @@ Part-1:
 - As suggested Amazon Linux 2 AMI has been used
 - A basic "Hello, World" webpage served on the url created as the output on the webserver stack. The url is basically DNS name of the load balancer, which can be uplifted with an proper Domain name using Route53 alias name.
 - We have created an auto scaling group as part of the deployment. It deploys additional EC2 instances and add it to the load balancer when EC2 CPU usage crosses 60%. 
-- It is capable of removing unhealthy instances from the load balancer using a health check.
+- It is capable of removing unhealthy instances from the load balancer and terminate, using a health check.
 - The VPC have 2 tier and spread across three Availability Zones
 
 Part-2:
@@ -52,7 +52,8 @@ Part-2:
 - The AWS account is not controlled by SCP to retrict the use of above resources
 
 **Conclution:**
-Further upliftment like serving on HTTPS can be implemented either from the Load Balancer or from the instance itself.
+- Further upliftment like serving on HTTPS can be implemented either from the Load Balancer or from the instance itself.
+- SNS topic can be deployed and configured to alert engineer when an autoscaling event (LAUNCH/LAUNCH_ERROR/TERMINATE/TERMINATE_ERROR) occurs.
 
 **References:**
 - VPC template is a modified version of AWS boiler plate template can be found on the link below -

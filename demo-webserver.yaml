@@ -98,18 +98,6 @@ Resources:
               - "sts:AssumeRole"
       ManagedPolicyArns:
           - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-      # Policies:
-      #   - PolicyName: SSMS3LogPermissions
-      #     PolicyDocument:
-      #       Version: 2012-10-17
-      #       Statement:
-      #         - Effect: Allow
-      #           Action:
-      #             - s3:PutObject
-      #             - s3:PutObjectAcl
-      #             - s3:GetEncryptionConfiguration
-      #             - s3:GetObject
-      #           Resource: '*'
 
   WebServerInstanceProfile:
     Type: "AWS::IAM::InstanceProfile"
@@ -132,24 +120,10 @@ Resources:
           Protocol: HTTP
           InstancePort: '80'
           InstanceProtocol: HTTP
-        # - !If
-        #   - DoSSL
-        #   - LoadBalancerPort: '443'
-        #     Protocol: HTTPS
-        #     InstancePort: '7990'
-        #     InstanceProtocol: HTTP
-        #     PolicyNames:
-        #       - SessionStickiness
-        #     SSLCertificateId: !Ref SSLCertificateARN
-        #   - !Ref AWS::NoValue
-        # - LoadBalancerPort: '443'
-        #   Protocol: HTTPS
-        #   InstancePort: '443'
-        #   InstanceProtocol: TCP
       HealthCheck:
         HealthyThreshold: '2'
         Interval: '15'
-        Target: TCP:80 # May need to chnage the health check to TCP:7990/status
+        Target: TCP:80
         Timeout: '10'
         UnhealthyThreshold: '2'
       Scheme: 'internet-facing'
@@ -159,20 +133,12 @@ Resources:
         - !ImportValue ap-southeast-2-demo-vpc-PublicSubnet1
         - !ImportValue ap-southeast-2-demo-vpc-PublicSubnet2
         - !ImportValue ap-southeast-2-demo-vpc-PublicSubnet3
-      # Tags:
-      #   - Key: Name
-      #     Value: !Sub ["${StackName} LoadBalancer", StackName: !Ref 'AWS::StackName']
-      #   - Key: Cluster
-      #     Value: !Ref AWS::StackName
+
   ClassicLoadBalancerSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group allowing SSH and HTTP/HTTPS access
       SecurityGroupIngress:
-        # - IpProtocol: tcp
-        #   FromPort: 22
-        #   ToPort: 22
-        #   CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
@@ -191,14 +157,6 @@ Resources:
     Properties:
       DesiredCapacity: !Ref ClusterNodeMin
       LaunchConfigurationName: !Ref ClusterNodeLaunchConfig
-      # NotificationConfigurations:
-      # - TopicARN: !ImportValue CDTOOLS-SNS-TOPIC-r0
-      #   NotificationTypes:
-      #   - autoscaling:EC2_INSTANCE_LAUNCH
-      #   - autoscaling:EC2_INSTANCE_LAUNCH_ERROR
-      #   - autoscaling:EC2_INSTANCE_TERMINATE
-      #   - autoscaling:EC2_INSTANCE_TERMINATE_ERROR
-
       LoadBalancerNames: 
         - !Ref WebServerLoadBalancer
       MinSize: !Ref ClusterNodeMin
@@ -301,7 +259,6 @@ Resources:
         - Name: AutoScalingGroupName
           Value: !Ref ClusterNodeGroup
       ComparisonOperator: GreaterThanThreshold
-
       
 Outputs:
   ClusterNodeGroup:
@@ -310,9 +267,5 @@ Outputs:
   ServiceURL:
     Description: The URL of the Bitbucket Data Center instance
     Value: !Sub "http://${WebServerLoadBalancer.DNSName}"
-    # Value: !GetAtt WebServerLoadBalancer.DNSName 
-    # Value: !Sub
-    #   - "${HTTP}://${LoadBalancerDNSName}"
-    #   - HTTP: !If [DoSSL, https, http]
-    #     LoadBalancerDNSName: !Ref LoadBalancerDNSName
+
  

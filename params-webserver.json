@@ -1,7 +1,7 @@
 [
   {
     "ParameterKey": "ClusterNodeMin",
-    "ParameterValue": "1"
+    "ParameterValue": "2"
   },
   {
     "ParameterKey": "ClusterNodeMax",
@@ -17,10 +17,10 @@
   },
   {
     "ParameterKey": "EngineerName",
-    "ParameterValue": "Zac"
+    "ParameterValue": "YourName"
   },
   {
     "ParameterKey": "EngineerEmail",
-    "ParameterValue": "me@mycompany.com"
+    "ParameterValue": "You@yourcompany.com.au"
   }
 ]

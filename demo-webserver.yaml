@@ -261,9 +261,6 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       
 Outputs:
-  ClusterNodeGroup:
-    Description: The name of the auto scaling group of cluster nodes
-    Value: !Ref ClusterNodeGroup
   ServiceURL:
     Description: The URL of the Bitbucket Data Center instance
     Value: !Sub "http://${WebServerLoadBalancer.DNSName}"

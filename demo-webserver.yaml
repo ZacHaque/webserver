@@ -18,6 +18,10 @@ Parameters:
     Type: String
   ClusterNodeMax:
     Type: String
+  SnsTopicForWebserver:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: sns-topic-test
+
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -92,9 +96,9 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: 
+              Service:
                 - ec2.amazonaws.com
-            Action: 
+            Action:
               - "sts:AssumeRole"
       ManagedPolicyArns:
           - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
@@ -103,7 +107,7 @@ Resources:
     Type: "AWS::IAM::InstanceProfile"
     Properties:
       Path: /
-      Roles: 
+      Roles:
         - !Ref WebServerRole
 
   WebServerLoadBalancer:
@@ -127,7 +131,7 @@ Resources:
         Timeout: '10'
         UnhealthyThreshold: '2'
       Scheme: 'internet-facing'
-      SecurityGroups: 
+      SecurityGroups:
         - !Ref ClassicLoadBalancerSG
       Subnets:
         - !ImportValue ap-southeast-2-demo-vpc-PublicSubnet1
@@ -157,7 +161,7 @@ Resources:
     Properties:
       DesiredCapacity: !Ref ClusterNodeMin
       LaunchConfigurationName: !Ref ClusterNodeLaunchConfig
-      LoadBalancerNames: 
+      LoadBalancerNames:
         - !Ref WebServerLoadBalancer
       MinSize: !Ref ClusterNodeMin
       MaxSize: !Ref ClusterNodeMax
@@ -191,7 +195,7 @@ Resources:
       IamInstanceProfile: !Ref WebServerInstanceProfile
       ImageId: !Ref ImageID
       InstanceType: !Ref ClusterNodeInstanceType
-      SecurityGroups: 
+      SecurityGroups:
         - !Ref WebServerSG
       UserData:
         Fn::Base64: |
@@ -227,42 +231,130 @@ Resources:
             systemctl start awslogsd
             systemctl enable awslogsd.service
 
-  ClusterNodeScaleUpPolicy:
-    Type: AWS::AutoScaling::ScalingPolicy
-    Properties:
-      AdjustmentType: ChangeInCapacity
-      AutoScalingGroupName: !Ref ClusterNodeGroup
-      Cooldown: '600'
-      ScalingAdjustment: 1
+  # ClusterNodeScaleUpPolicy:
+  #   Type: AWS::AutoScaling::ScalingPolicy
+  #   Properties:
+  #     AdjustmentType: ChangeInCapacity
+  #     AutoScalingGroupName: !Ref ClusterNodeGroup
+  #     Cooldown: '600'
+  #     ScalingAdjustment: 1
 
-  ClusterNodeScaleDownPolicy:
-    Type: AWS::AutoScaling::ScalingPolicy
-    Properties:
-      AdjustmentType: ChangeInCapacity
-      AutoScalingGroupName: !Ref ClusterNodeGroup
-      Cooldown: '600'
-      ScalingAdjustment: -1
+  # ClusterNodeScaleDownPolicy:
+  #   Type: AWS::AutoScaling::ScalingPolicy
+  #   Properties:
+  #     AdjustmentType: ChangeInCapacity
+  #     AutoScalingGroupName: !Ref ClusterNodeGroup
+  #     Cooldown: '600'
+  #     ScalingAdjustment: -1
 
-  CPUAlarmHigh:
+  # CPUAlarmHigh:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmDescription: Scale up if CPU > 60% for 5 minutes
+  #     MetricName: CPUUtilization
+  #     Namespace: AWS/EC2
+  #     Statistic: Average
+  #     Period: 60
+  #     EvaluationPeriods: 5
+  #     Threshold: 60
+  #     AlarmActions:
+  #       - !Ref ClusterNodeScaleUpPolicy
+  #     Dimensions:
+  #       - Name: AutoScalingGroupName
+  #         Value: !Ref ClusterNodeGroup
+  #     ComparisonOperator: GreaterThanThreshold
+
+  MonitorCpuUtilizationAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmDescription: Scale up if CPU > 60% for 5 minutes
+      AlarmDescription: Alarm if CPU > 80% for 15 minutes
       MetricName: CPUUtilization
       Namespace: AWS/EC2
-      Statistic: Average
-      Period: 60
-      EvaluationPeriods: 5
-      Threshold: 60
-      AlarmActions: 
-        - !Ref ClusterNodeScaleUpPolicy
       Dimensions:
         - Name: AutoScalingGroupName
           Value: !Ref ClusterNodeGroup
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 80
+      AlarmActions:
+        - !ImportValue WB-SNS-TOPIC-Param
+      OKActions:
+        - !ImportValue WB-SNS-TOPIC-Param
+      InsufficientDataActions:
+        - !ImportValue WB-SNS-TOPIC-Param
+      TreatMissingData: breaching
       ComparisonOperator: GreaterThanThreshold
-      
+
+  MonitorLongerCpuUtilizationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Alarm if CPU > 10% for continuous 30 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref ClusterNodeGroup
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 30
+      Threshold: 10
+      AlarmActions:
+        - !ImportValue WB-SNS-TOPIC-Param
+      OKActions:
+        - !ImportValue WB-SNS-TOPIC-Param
+      InsufficientDataActions:
+        - !ImportValue WB-SNS-TOPIC-Param
+      TreatMissingData: breaching
+      ComparisonOperator: GreaterThanThreshold
+
+  MonitorNetworkInAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Alarm if NetworkIn is more than 20M byte for 15 min
+      MetricName: NetworkIn
+      Namespace: AWS/EC2
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref ClusterNodeGroup
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 15
+      Threshold: 20000000
+      AlarmActions:
+        - !ImportValue WB-SNS-TOPIC-Param
+        - !ImportValue WB-SNS-TOPIC-Param
+      OKActions:
+        - !ImportValue WB-SNS-TOPIC-Param
+      InsufficientDataActions:
+        - !ImportValue WB-SNS-TOPIC-Param
+      TreatMissingData: breaching
+      ComparisonOperator: GreaterThanThreshold
+
+  MonitorNetworkOutAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Alarm if NetworkOut is more than 20M byte for 15 min
+      MetricName: NetworkOut
+      Namespace: AWS/EC2
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref ClusterNodeGroup
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 15
+      Threshold: 20000000
+      AlarmActions:
+        - !ImportValue WB-SNS-TOPIC-Param
+      OKActions:
+        - !ImportValue WB-SNS-TOPIC-Param
+      InsufficientDataActions:
+        - !ImportValue WB-SNS-TOPIC-Param
+      TreatMissingData: breaching
+      ComparisonOperator: GreaterThanThreshold
+
 Outputs:
   ServiceURL:
     Description: The URL of the Bitbucket Data Center instance
     Value: !Sub "http://${WebServerLoadBalancer.DNSName}"
 
- 

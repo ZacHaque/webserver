@@ -1,0 +1,95 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: SNS Topic and permissions for WebServer alerting
+
+Parameters:
+#   InstallationName:
+#     Type: String
+#     Description: Unique DNS stack installation name
+#   ConnectedAccountIds:
+#     Type: CommaDelimitedList
+#     Description: ARNs of AWS Accounts who will use resources from this stack
+  TopicName:
+    Type: String
+    Description: Name of the sns topic
+    Default: WebServer
+  TopicDisplayName:
+    Type: String
+    Description: Name of the sns topic servered as email from
+    Default: WebServer-Health
+  AlertingEmail:
+    Type: String
+    Description: Email address for subscription
+    Default: myemail@myemail.com.au
+
+Resources:
+
+  WebServerTopicParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+        Name: !Sub ${TopicName}-sns-topic
+        Type: String
+        Value: !Ref WSMonitoringAlertsTopic
+        Description: this is to test reading sns topic form param store
+
+  WSMonitoringAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Ref TopicName
+      DisplayName: !Ref TopicDisplayName
+
+  WSMonitoringAlertsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: !Ref AlertingEmail
+      Protocol: email
+      TopicArn: !Ref WSMonitoringAlertsTopic
+
+  WSMonitoringAlertsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref WSMonitoringAlertsTopic
+      PolicyDocument:
+        Id: MonitoringPublishing
+        Version: 2012-10-17
+        Statement:
+          - Sid: AllowUsAccess
+            Effect: Allow
+            Principal:
+              AWS: '*'
+            Action:
+              - SNS:Receive
+              - SNS:Subscribe
+            Resource: !Sub arn:aws:sns:${AWS::Region}:${AWS::AccountId}:${TopicName}
+            Condition:
+              StringEquals:
+                aws:SourceOwner: !Ref 'AWS::AccountId'
+          - Sid: AllowClientAccountsPublish
+            Effect: Allow
+            Principal:
+              AWS: '*'
+            Action: SNS:Publish
+            Resource: !Sub arn:aws:sns:${AWS::Region}:${AWS::AccountId}:${TopicName}
+            Condition:
+              StringEquals:
+                aws:SourceOwner: !Ref 'AWS::AccountId'
+          - Sid: AllowEventsPublish
+            Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: SNS:Publish
+            Resource: !Sub arn:aws:sns:${AWS::Region}:${AWS::AccountId}:${TopicName}
+
+Outputs:
+  WSMonitoringSnsTopicArn:
+    Value: !Ref WSMonitoringAlertsTopic
+    Export:
+      Name: "WB-SNS-TOPIC"
+  WSMonitoringSnsTopicParam:
+    Value: !GetAtt WebServerTopicParameter.Value
+        # Fn::GetAtt:
+        # - WebServerTopicParameter
+        # - value
+    Export:
+        Name: "WB-SNS-TOPIC-Param"

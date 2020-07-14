@@ -1,11 +1,11 @@
 [
   {
     "ParameterKey": "ClusterNodeMin",
-    "ParameterValue": "2"
+    "ParameterValue": "1"
   },
   {
     "ParameterKey": "ClusterNodeMax",
-    "ParameterValue": "3"
+    "ParameterValue": "2"
   },
   {
     "ParameterKey": "ClusterNodeInstanceType",
